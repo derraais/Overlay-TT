@@ -1,0 +1,597 @@
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Live Stream Overlay (No Camera)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <!-- Animate.css for alert popups -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        ttRed: '#FF0050',
+                        ttCyan: '#00F2FE',
+                        ttDark: '#121212',
+                    },
+                    animation: {
+                        'pulse-glow': 'pulseGlow 2s infinite',
+                        'marquee': 'marquee 18s linear infinite',
+                        'float': 'float 3s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        pulseGlow: {
+                            '0%, 100%': { boxShadow: '0 0 15px rgba(0, 242, 254, 0.6), 0 0 30px rgba(255, 0, 80, 0.4)' },
+                            '50%': { boxShadow: '0 0 25px rgba(0, 242, 254, 0.9), 0 0 45px rgba(255, 0, 80, 0.7)' },
+                        },
+                        marquee: {
+                            '0%': { transform: 'translateX(100%)' },
+                            '100%': { transform: 'translateX(-100%)' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-6px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Glassmorphism Styling */
+        .glass-panel {
+            background: rgba(12, 12, 18, 0.7);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Neon Glow Text & Borders */
+        .neon-text-tiktok {
+            text-shadow: 0 0 8px rgba(0, 242, 254, 0.7), 0 0 16px rgba(255, 0, 80, 0.7);
+        }
+
+        .neon-box-glow {
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.25), 0 0 30px rgba(255, 0, 80, 0.25);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 242, 254, 0.4);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 0, 80, 0.7);
+        }
+
+        /* Stream Screen Aspect Ratio */
+        .screen-ratio {
+            aspect-ratio: 9/16;
+            max-height: 94vh;
+        }
+
+        /* Chroma Key Green Background */
+        .bg-chroma-key {
+            background-color: #00FF00 !important;
+            background-image: none !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-white font-sans antialiased min-h-screen flex flex-col lg:flex-row overflow-x-hidden select-none">
+
+    <!-- MAIN PREVIEW CANVAS (STREAM OVERLAY VIEW) -->
+    <div id="mainOverlayContainer" class="flex-1 flex items-center justify-center p-2 sm:p-4 md:p-6 relative bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-900 via-black to-black min-h-screen transition-all">
+        
+        <!-- Stream Frame Simulator -->
+        <div id="streamCanvas" class="screen-ratio w-full max-w-[430px] rounded-3xl overflow-hidden relative shadow-2xl border border-white/10 flex flex-col justify-between transition-all">
+            
+            <!-- Mock Gameplay / Background Live Content -->
+            <div class="absolute inset-0 z-0 bg-cover bg-center transition-all duration-500 opacity-70" 
+                 id="bgMock" 
+                 style="background-image: url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80');">
+                <div id="bgGradientOverlay" class="absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/85"></div>
+            </div>
+
+            <!-- TOP SECTION: HEADER & TICKER -->
+            <div class="z-20 space-y-1.5">
+                <!-- Streamer Top Info Bar -->
+                <div class="p-3 flex justify-between items-center text-xs bg-black/50 backdrop-blur-md border-b border-white/10">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-ttRed to-pink-600 text-white animate-pulse shadow-md">
+                            <i class="fa-solid fa-circle text-[5px] mr-1"></i> LIVE
+                        </span>
+                        <span class="text-white font-bold font-display tracking-wide" id="dispStreamerName">@BangStreamer</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-white/80 text-[11px] font-semibold bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
+                        <i class="fa-solid fa-users text-ttCyan"></i>
+                        <span id="dispViewerCount">2.8k</span>
+                    </div>
+                </div>
+
+                <!-- 1. TOP TICKER (RUNNING TEXT) -->
+                <div id="tickerBar" class="mx-2 bg-black/60 backdrop-blur-md py-1.5 px-3 border border-white/10 rounded-xl overflow-hidden text-xs flex items-center gap-2 shadow-lg">
+                    <div class="bg-gradient-to-r from-ttCyan to-ttRed px-2 py-0.5 rounded text-[10px] font-black text-black tracking-wider uppercase shrink-0 shadow">
+                        INFO
+                    </div>
+                    <div class="relative flex overflow-x-hidden whitespace-nowrap w-full">
+                        <div class="animate-marquee flex gap-8 text-white/90 text-[11px] font-medium" id="tickerContent">
+                            <span><i class="fa-solid fa-user-plus text-ttCyan mr-1"></i> Follower Baru: <b class="text-white font-bold" id="dispTickerFollower">Rizky21</b></span>
+                            <span><i class="fa-solid fa-gift text-ttRed mr-1"></i> Top Gift: <b class="text-white font-bold" id="dispTickerGift">Siti_UwU (Paus x1)</b></span>
+                            <span><i class="fa-solid fa-bullhorn text-yellow-400 mr-1"></i> <span id="dispAnnouncement">Mabar tiap jam 8 malam! Follow & share ya guys 🔥</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. GOAL PROGRESS BAR OVERLAY -->
+                <div id="goalBox" class="px-2 pt-1">
+                    <div class="glass-panel rounded-xl p-2.5 shadow-lg relative overflow-hidden border border-white/10">
+                        <div class="flex justify-between items-center text-xs font-bold mb-1">
+                            <span class="text-white flex items-center gap-1.5 font-display tracking-wide" id="dispGoalTitle">
+                                <i class="fa-solid fa-trophy text-yellow-400"></i> Target Follower
+                            </span>
+                            <span class="text-ttCyan font-mono font-bold" id="dispGoalValues">850 / 1000</span>
+                        </div>
+                        <!-- Progress Bar Background -->
+                        <div class="w-full bg-black/50 rounded-full h-3.5 overflow-hidden p-0.5 border border-white/15">
+                            <div id="dispGoalProgress" class="h-full rounded-full bg-gradient-to-r from-ttCyan via-purple-500 to-ttRed transition-all duration-500 shadow-md" style="width: 85%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. CENTER POP-UP ALERT NOTIFICATION CONTAINER -->
+            <div id="alertContainer" class="z-30 absolute inset-x-0 top-1/3 flex flex-col items-center justify-center pointer-events-none px-4">
+                <!-- Alert Pop-ups will dynamically inject here -->
+            </div>
+
+            <!-- BOTTOM OVERLAY SECTION (CHAT BOX & SOCIAL BADGES) -->
+            <div class="z-20 p-3 space-y-2">
+                
+                <!-- 3. TRANSPARENT CHAT BOX OVERLAY -->
+                <div id="chatBox" class="glass-panel rounded-2xl p-3 max-h-56 overflow-y-auto space-y-2 text-xs flex flex-col justify-end shadow-xl border border-white/10 neon-box-glow">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-1">
+                        <span class="text-[10px] font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-ttCyan to-ttRed uppercase tracking-wider">
+                            <i class="fa-brands fa-tiktok mr-1 text-ttCyan"></i> Live Chat TikTok
+                        </span>
+                        <span class="text-[9px] text-white/50 bg-white/10 px-1.5 py-0.5 rounded">Realtime</span>
+                    </div>
+                    
+                    <div class="space-y-2" id="chatMessageList">
+                        <!-- Chat Message Items -->
+                        <div class="animate__animated animate__fadeInUp animate__faster flex items-start gap-1.5 bg-black/30 p-1.5 rounded-lg border border-white/5">
+                            <span class="font-extrabold text-ttCyan shrink-0">BudiGamer:</span>
+                            <span class="text-white/90">Mantap bang, mabar dong ID gua! 🔥</span>
+                        </div>
+                        <div class="animate__animated animate__fadeInUp animate__faster flex items-start gap-1.5 bg-black/30 p-1.5 rounded-lg border border-white/5">
+                            <span class="font-extrabold text-pink-400 shrink-0">SitiAisyah:</span>
+                            <span class="text-white/90">Semangat live nya yaaa 🥰✨</span>
+                        </div>
+                        <div class="animate__animated animate__fadeInUp animate__faster flex items-start gap-1.5 bg-black/30 p-1.5 rounded-lg border border-white/5">
+                            <span class="font-extrabold text-yellow-400 shrink-0">RajaGift:</span>
+                            <span class="text-white/90">Gua kirim mawar 10x nih! 🌹</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. SOCIAL MEDIA BADGES BANNER -->
+                <div id="socialBox" class="glass-panel rounded-xl p-2.5 flex items-center justify-around text-xs font-semibold text-white/90 border border-white/10">
+                    <div class="flex items-center gap-1.5">
+                        <i class="fa-brands fa-tiktok text-ttCyan text-sm"></i>
+                        <span id="dispSocialTt" class="text-[11px] font-bold">@bangstreamer</span>
+                    </div>
+                    <div class="h-3 w-[1px] bg-white/20"></div>
+                    <div class="flex items-center gap-1.5">
+                        <i class="fa-brands fa-instagram text-pink-500 text-sm"></i>
+                        <span id="dispSocialIg" class="text-[11px] font-bold">@bang.streamer</span>
+                    </div>
+                    <div class="h-3 w-[1px] bg-white/20"></div>
+                    <div class="flex items-center gap-1.5">
+                        <i class="fa-brands fa-youtube text-red-500 text-sm"></i>
+                        <span id="dispSocialYt" class="text-[11px] font-bold">Bang Streamer TV</span>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- FLOATING CONTROL BUTTONS (OBS & COLLAPSE PANEL) -->
+        <div class="fixed top-4 right-4 z-50 flex items-center gap-2">
+            <button onclick="toggleOBSMode()" class="bg-black/80 hover:bg-black text-white px-3 py-2 rounded-xl text-xs font-bold border border-white/20 shadow-xl flex items-center gap-2 backdrop-blur-md transition-all hover:scale-105 active:scale-95">
+                <i class="fa-solid fa-expand text-ttCyan" id="obsIcon"></i>
+                <span id="obsBtnText">OBS Mode</span>
+            </button>
+            <button onclick="toggleControlSidePanel()" class="lg:hidden bg-ttRed text-white p-2 rounded-xl text-xs font-bold shadow-xl flex items-center justify-center">
+                <i class="fa-solid fa-sliders"></i>
+            </button>
+        </div>
+
+    </div>
+
+
+    <!-- 6. CONTROL PANEL (COLLAPSIBLE / FLOATING) -->
+    <div id="controlSidePanel" class="w-full lg:w-[400px] bg-neutral-900 border-l border-white/10 p-4 sm:p-6 overflow-y-auto max-h-screen z-40 transition-all duration-300">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-white/10 pb-4 mb-5">
+            <div>
+                <h1 class="font-display font-black text-lg text-transparent bg-clip-text bg-gradient-to-r from-ttCyan to-ttRed">
+                    TikTok Overlay Control
+                </h1>
+                <p class="text-[11px] text-gray-400 mt-0.5">Streamer Control Panel (No Camera)</p>
+            </div>
+            <span class="px-2 py-1 bg-ttCyan/10 border border-ttCyan/30 text-ttCyan rounded-lg text-[10px] font-bold">TikTok Neon</span>
+        </div>
+
+        <div class="space-y-5 text-sm">
+
+            <!-- BACKGROUND MODE SWITCHER (OBS GREEN SCREEN) -->
+            <div class="bg-black/40 border border-white/10 p-3.5 rounded-2xl space-y-2">
+                <label class="font-bold text-xs uppercase tracking-wider text-gray-300 block flex items-center gap-1.5">
+                    <i class="fa-solid fa-desktop text-ttCyan"></i> Mode Latar Canvas
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="setCanvasBg('game')" id="btnBgGame" class="p-2 rounded-xl bg-ttCyan/20 border border-ttCyan text-xs font-bold text-center text-ttCyan">
+                        <i class="fa-solid fa-gamepad mr-1"></i> Game Preview
+                    </button>
+                    <button onclick="setCanvasBg('chroma')" id="btnBgChroma" class="p-2 rounded-xl bg-black border border-white/10 hover:bg-neutral-800 text-xs font-bold text-center text-gray-300">
+                        <i class="fa-solid fa-square text-green-500 mr-1"></i> Green Screen
+                    </button>
+                </div>
+            </div>
+
+            <!-- SIMULATION ALERTS -->
+            <div class="bg-black/40 border border-white/10 p-3.5 rounded-2xl space-y-2.5">
+                <h2 class="font-bold text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2">
+                    <i class="fa-solid fa-bolt text-yellow-400"></i> Tes Notifikasi Live
+                </h2>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="triggerAlert('follower')" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-90 text-white py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg transition active:scale-95">
+                        <i class="fa-solid fa-user-plus"></i> Tes Follower
+                    </button>
+                    <button onclick="triggerAlert('gift')" class="bg-gradient-to-r from-pink-600 to-red-600 hover:opacity-90 text-white py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg transition active:scale-95">
+                        <i class="fa-solid fa-gift"></i> Tes Gift
+                    </button>
+                </div>
+            </div>
+
+            <!-- PROFILE & ANNOUNCEMENT INFO EDIT -->
+            <div class="space-y-3">
+                <label class="font-bold text-xs uppercase tracking-wider text-gray-400 block">Informasi Live & Running Text</label>
+                <div class="space-y-2">
+                    <div>
+                        <span class="text-[11px] text-gray-400">Username Streamer</span>
+                        <input type="text" id="inputName" value="@BangStreamer" oninput="updateProfile()" class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-ttCyan transition">
+                    </div>
+                    <div>
+                        <span class="text-[11px] text-gray-400">Pengumuman Ticker</span>
+                        <input type="text" id="inputAnnouncement" value="Mabar tiap jam 8 malam! Follow & share ya guys 🔥" oninput="updateAnnouncement()" class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-ttCyan transition">
+                    </div>
+                </div>
+            </div>
+
+            <!-- GOAL BAR CUSTOMIZER -->
+            <div class="space-y-3">
+                <label class="font-bold text-xs uppercase tracking-wider text-gray-400 block">Pengaturan Target (Goal Bar)</label>
+                <div class="space-y-2">
+                    <div>
+                        <span class="text-[11px] text-gray-400">Judul Goal Target</span>
+                        <input type="text" id="inputGoalTitle" value="Target Follower" oninput="updateGoal()" class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-ttCyan transition">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <span class="text-[11px] text-gray-400">Capaian Saat Ini</span>
+                            <input type="number" id="inputGoalCurrent" value="850" oninput="updateGoal()" class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-ttCyan transition">
+                        </div>
+                        <div>
+                            <span class="text-[11px] text-gray-400">Target Maksimal</span>
+                            <input type="number" id="inputGoalMax" value="1000" oninput="updateGoal()" class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-ttCyan transition">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SOCIAL MEDIA HANDLES -->
+            <div class="space-y-3">
+                <label class="font-bold text-xs uppercase tracking-wider text-gray-400 block">Sosial Media Badges</label>
+                <div class="space-y-2">
+                    <input type="text" id="inputSocialTt" value="@bangstreamer" oninput="updateSocials()" placeholder="TikTok Tag" class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-ttCyan transition">
+                    <input type="text" id="inputSocialIg" value="@bang.streamer" oninput="updateSocials()" placeholder="Instagram Tag" class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-ttCyan transition">
+                    <input type="text" id="inputSocialYt" value="Bang Streamer TV" oninput="updateSocials()" placeholder="YouTube Channel" class="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-ttCyan transition">
+                </div>
+            </div>
+
+            <!-- TOGGLE MODULES -->
+            <div class="space-y-2.5 border-t border-white/10 pt-4">
+                <label class="font-bold text-xs uppercase tracking-wider text-gray-400 block">Sembunyikan / Tampilkan Modul</label>
+                <div class="space-y-1.5">
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-black/30 border border-white/5 cursor-pointer">
+                        <span class="text-xs">Top Ticker Bar</span>
+                        <input type="checkbox" checked onchange="toggleElement('tickerBar')" class="rounded accent-ttCyan">
+                    </label>
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-black/30 border border-white/5 cursor-pointer">
+                        <span class="text-xs">Goal Progress Bar</span>
+                        <input type="checkbox" checked onchange="toggleElement('goalBox')" class="rounded accent-ttCyan">
+                    </label>
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-black/30 border border-white/5 cursor-pointer">
+                        <span class="text-xs">Chat Box Transparent</span>
+                        <input type="checkbox" checked onchange="toggleElement('chatBox')" class="rounded accent-ttCyan">
+                    </label>
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-black/30 border border-white/5 cursor-pointer">
+                        <span class="text-xs">Social Media Badges</span>
+                        <input type="checkbox" checked onchange="toggleElement('socialBox')" class="rounded accent-ttCyan">
+                    </label>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT AUDIO & INTERACTIVE LOGIC -->
+    <script>
+        // Web Audio API Sound Effects Synthesizer (No external sound files required)
+        function playAudioAlert(type) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                if (type === 'follower') {
+                    // Upbeat Chime Sound Effect
+                    const now = ctx.currentTime;
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.1); // E5
+                    osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.2); // G5
+                    osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.3); // C6
+                    
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                } else if (type === 'gift') {
+                    // Fanfare Super Sound Effect
+                    const now = ctx.currentTime;
+                    [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+                        
+                        gain.gain.setValueAtTime(0.25, now + idx * 0.08);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.4);
+                        
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        
+                        osc.start(now + idx * 0.08);
+                        osc.stop(now + idx * 0.08 + 0.4);
+                    });
+                }
+            } catch (e) {
+                console.log('Audio Context Error:', e);
+            }
+        }
+
+        // Update Profile Info
+        function updateProfile() {
+            const name = document.getElementById('inputName').value;
+            document.getElementById('dispStreamerName').innerText = name || '@Streamer';
+        }
+
+        // Update Announcement
+        function updateAnnouncement() {
+            const text = document.getElementById('inputAnnouncement').value;
+            document.getElementById('dispAnnouncement').innerText = text || 'Follow & Share ya!';
+        }
+
+        // Update Goal Bar Info
+        function updateGoal() {
+            const title = document.getElementById('inputGoalTitle').value;
+            const current = parseInt(document.getElementById('inputGoalCurrent').value) || 0;
+            const max = parseInt(document.getElementById('inputGoalMax').value) || 1000;
+
+            const percentage = Math.min(Math.max((current / max) * 100, 0), 100);
+
+            document.getElementById('dispGoalTitle').innerHTML = `<i class="fa-solid fa-trophy text-yellow-400"></i> ${title}`;
+            document.getElementById('dispGoalValues').innerText = `${current} / ${max}`;
+            document.getElementById('dispGoalProgress').style.width = `${percentage}%`;
+        }
+
+        // Update Social Media Handles
+        function updateSocials() {
+            document.getElementById('dispSocialTt').innerText = document.getElementById('inputSocialTt').value || '@tiktok';
+            document.getElementById('dispSocialIg').innerText = document.getElementById('inputSocialIg').value || '@instagram';
+            document.getElementById('dispSocialYt').innerText = document.getElementById('inputSocialYt').value || 'YouTube';
+        }
+
+        // Toggle Element Visibility
+        function toggleElement(elementId) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.classList.toggle('hidden');
+            }
+        }
+
+        // Switch Canvas Background Mode (Game / Green Screen)
+        function setCanvasBg(mode) {
+            const bgMock = document.getElementById('bgMock');
+            const bgOverlay = document.getElementById('bgGradientOverlay');
+            const btnGame = document.getElementById('btnBgGame');
+            const btnChroma = document.getElementById('btnBgChroma');
+
+            if (mode === 'chroma') {
+                bgMock.style.backgroundImage = 'none';
+                bgMock.classList.add('bg-chroma-key');
+                bgOverlay.classList.add('hidden');
+
+                btnChroma.className = "p-2 rounded-xl bg-green-500/20 border border-green-500 text-xs font-bold text-center text-green-400";
+                btnGame.className = "p-2 rounded-xl bg-black border border-white/10 hover:bg-neutral-800 text-xs font-bold text-center text-gray-300";
+            } else {
+                bgMock.classList.remove('bg-chroma-key');
+                bgMock.style.backgroundImage = "url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80')";
+                bgOverlay.classList.remove('hidden');
+
+                btnGame.className = "p-2 rounded-xl bg-ttCyan/20 border border-ttCyan text-xs font-bold text-center text-ttCyan";
+                btnChroma.className = "p-2 rounded-xl bg-black border border-white/10 hover:bg-neutral-800 text-xs font-bold text-center text-gray-300";
+            }
+        }
+
+        // Pop-up Alert Simulator Logic
+        function triggerAlert(type) {
+            playAudioAlert(type);
+
+            const alertContainer = document.getElementById('alertContainer');
+            alertContainer.innerHTML = ''; // clear current
+
+            const alertCard = document.createElement('div');
+            alertCard.className = "animate__animated animate__zoomIn glass-panel p-4 rounded-2xl shadow-2xl flex flex-col items-center border-2 border-ttCyan text-center min-w-[250px] bg-black/80 backdrop-blur-xl neon-box-glow";
+
+            if (type === 'follower') {
+                const names = ['Andi_Pratama', 'Dewi_Sari', 'GamerIndo99', 'Rian_Pro', 'Bima_Sakto'];
+                const randomName = names[Math.floor(Math.random() * names.length)];
+                
+                // Update ticker follower
+                document.getElementById('dispTickerFollower').innerText = randomName;
+
+                alertCard.innerHTML = `
+                    <div class="w-12 h-12 rounded-full bg-gradient-to-r from-ttCyan to-blue-500 flex items-center justify-center text-xl mb-2 text-black font-extrabold animate-bounce shadow-lg">
+                        <i class="fa-solid fa-user-plus"></i>
+                    </div>
+                    <div class="text-[11px] uppercase font-extrabold text-ttCyan tracking-widest neon-text-tiktok">FOLLOWER BARU!</div>
+                    <div class="text-base font-black text-white mt-0.5">${randomName}</div>
+                    <div class="text-[10px] text-white/70 mt-1">Mulai mengikuti live stream</div>
+                `;
+            } else if (type === 'gift') {
+                const gifts = [
+                    { name: 'Mawar', icon: '🌹', qty: '10x' },
+                    { name: 'Paus TikTok', icon: '🐳', qty: '1x' },
+                    { name: 'Singa Gold', icon: '🦁', qty: '1x' },
+                    { name: 'Kopi Toktok', icon: '☕', qty: '5x' }
+                ];
+                const randomGift = gifts[Math.floor(Math.random() * gifts.length)];
+                const senders = ['Sultan_Kalsel', 'Nia_Ramadhani', 'Bagas31', 'Dewi_Gamer'];
+                const randomSender = senders[Math.floor(Math.random() * senders.length)];
+
+                // Update ticker gift
+                document.getElementById('dispTickerGift').innerText = `${randomSender} (${randomGift.name} ${randomGift.qty})`;
+
+                alertCard.innerHTML = `
+                    <div class="text-4xl mb-1 animate-pulse filter drop-shadow-lg">${randomGift.icon}</div>
+                    <div class="text-[11px] uppercase font-extrabold text-ttRed tracking-widest neon-text-tiktok">SUPER GIFT!</div>
+                    <div class="text-sm font-black text-white mt-0.5">${randomSender}</div>
+                    <div class="text-xs font-bold text-yellow-400 mt-0.5">Mengirim ${randomGift.name} (${randomGift.qty})</div>
+                `;
+            }
+
+            alertContainer.appendChild(alertCard);
+
+            // Auto Remove Alert
+            setTimeout(() => {
+                alertCard.classList.remove('animate__zoomIn');
+                alertCard.classList.add('animate__zoomOut');
+                setTimeout(() => {
+                    alertCard.remove();
+                }, 600);
+            }, 3200);
+        }
+
+        // Toggle Fullscreen OBS Capture Mode
+        let isOBSMode = false;
+        function toggleOBSMode() {
+            isOBSMode = !isOBSMode;
+            const sidePanel = document.getElementById('controlSidePanel');
+            const mainContainer = document.getElementById('mainOverlayContainer');
+            const btnText = document.getElementById('obsBtnText');
+            const obsIcon = document.getElementById('obsIcon');
+
+            if (isOBSMode) {
+                sidePanel.classList.add('hidden');
+                mainContainer.classList.remove('p-2', 'sm:p-4', 'md:p-6');
+                mainContainer.classList.add('p-0');
+                btnText.innerText = "Keluar OBS Mode";
+                obsIcon.className = "fa-solid fa-compress text-ttRed";
+            } else {
+                sidePanel.classList.remove('hidden');
+                mainContainer.classList.add('p-2', 'sm:p-4', 'md:p-6');
+                btnText.innerText = "OBS Mode";
+                obsIcon.className = "fa-solid fa-expand text-ttCyan";
+            }
+        }
+
+        function toggleControlSidePanel() {
+            const sidePanel = document.getElementById('controlSidePanel');
+            sidePanel.classList.toggle('hidden');
+        }
+
+        // Simulated Automatic Chat Generator
+        const mockUsers = ['Andi', 'Sintia', 'GamerGantenng', 'BobaLover', 'Rizky', 'Nanda_32', 'Kevin_Gaming'];
+        const mockMessages = [
+            'Halo bang, mabar ML yuk!',
+            'Semangat terus live-nya!',
+            'Anjay keren banget gameplaynya 🔥',
+            'Gift mawar meluncur 🌹',
+            'Sapa gua dong bang!',
+            'Lanjut game berikutnya bang!',
+            'Gua udah share livenya yaaa'
+        ];
+
+        setInterval(() => {
+            const chatList = document.getElementById('chatMessageList');
+            const randomUser = mockUsers[Math.floor(Math.random() * mockUsers.length)];
+            const randomMsg = mockMessages[Math.floor(Math.random() * mockMessages.length)];
+
+            const msgEl = document.createElement('div');
+            msgEl.className = 'animate__animated animate__fadeInUp animate__faster flex items-start gap-1.5 bg-black/30 p-1.5 rounded-lg border border-white/5';
+            msgEl.innerHTML = `<span class="font-extrabold text-ttCyan shrink-0">${randomUser}:</span><span class="text-white/90">${randomMsg}</span>`;
+
+            chatList.appendChild(msgEl);
+
+            // Keep max 5 chat messages visible
+            if (chatList.children.length > 5) {
+                chatList.removeChild(chatList.firstElementChild);
+            }
+
+            // Scroll to bottom
+            const chatBox = document.getElementById('chatBox');
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }, 3800);
+
+    </script>
+</body>
+</html>
+```
